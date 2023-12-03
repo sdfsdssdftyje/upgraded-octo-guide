@@ -28,39 +28,6 @@ jobs:
             echo "ACTOR_IS_COLLABORATOR_OR_OWNER=false" >> $GITHUB_ENV
           fi
 
-      - name: Comment and potentially close the issue
-        uses: actions/github-script@v6
-        with:
-          script: |
-            const issue_number = context.issue.number;
-            const actor = context.actor;
-            const actorIsCool = process.env.ACTOR_IS_COLLABORATOR_OR_OWNER;
-            let message;
-            let shouldClose = false;
-
-            if (actorIsCool === "false") {
-              message = `### Hey @${actor}! :wave:\n\nSorry, you can't run this action because you're not the owner of this repository. Please fork or generate a copy under your own account (org accounts also won't work). Open an issue on your own copy to try again.`;
-              shouldClose = true;
-            } else {
-              message = `### Awesome @${actor}! :tada:\n\nYour job is starting! You are good to go for the next steps.\n\nDon't go away! Your login link will appear here after setup completes.\n\nEnhance your calm, as set up will take about **6 minutes** from here. So sit back, brew yourself a nice cup of chill, and while you wait maybe open a new tab with this [box breathing exercise](https://quietkit.com/box-breathing/).\n\nWhen you come back, keep an eye out for further instructions.`;
-            }
-
-            github.rest.issues.createComment({
-              issue_number: issue_number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: message
-            });
-
-            if (shouldClose) {
-              github.rest.issues.update({
-                issue_number: issue_number,
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                state: "closed"
-              });
-              setTimeout(() => process.exit(1), 4000);
-            }
 
       - name: Checkout code
         uses: actions/checkout@v4
