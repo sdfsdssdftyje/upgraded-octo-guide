@@ -1,0 +1,71 @@
+#!/usr/bin/env bash
+
+sudo="$(command -v sudo)"
+
+initialize_package_manager() {
+  local package_manager
+  local amzn_release_info
+
+  if command -v apt >/dev/null; then
+    package_manager=$(command -v apt)
+  elif command -v dnf >/dev/null; then
+    package_manager=$(command -v dnf)
+    $sudo dnf config-manager --set-enabled crb
+    $sudo dnf -y upgrade --refresh
+  elif command -v yum >/dev/null && [[ -f /etc/system-release ]]; then
+    amzn_release_info=$(cat /etc/system-release)
+    if [[ $amzn_release_info == *"Amazon Linux"* ]]; then
+      package_manager=$(command -v yum)
+      # Additional commands for Amazon Linux here if needed
+    fi
+  else
+    echo "No supported package manager found. Exiting."
+    return 1
+  fi
+
+  echo "Using package manager: $package_manager"
+  export APT=$package_manager
+}
+
+# Call the function to initialize and export the APT variable
+initialize_package_manager
+
+# Check for certbot and install if not found, specific actions for Amazon Linux
+if ! command -v certbot >/dev/null; then
+  if [[ -f /etc/system-release ]]; then
+    amzn_release_info=$(cat /etc/system-release)
+    if [[ $amzn_release_info == *"Amazon Linux"* ]]; then
+      # Install Certbot for Amazon Linux following the provided instructions
+      $sudo yum install -y python3 augeas-libs
+      $sudo python3 -m venv /opt/certbot/
+      $sudo /opt/certbot/bin/pip install --upgrade pip
+      $sudo /opt/certbot/bin/pip install certbot certbot-nginx
+      $sudo ln -sf /opt/certbot/bin/certbot /usr/bin/certbot
+    else
+      # Install Certbot for other distributions
+      $sudo $APT -y install certbot curl
+    fi
+  else
+    $sudo $APT -y install certbot curl
+  fi
+fi
+
+if [[ -z "$1" ]]; then
+  echo "Supply a domain name as first argument" >&2
+  exit 1
+fi
+
+if [[ -z "${BB_USER_EMAIL}" ]]; then
+  echo "Supply BB_USER_EMAIL environment variable" >&2
+  exit 1
+fi
+
+
+$sudo certbot certonly --standalone --keep -d $1 --agree-tos -m "${BB_USER_EMAIL}" --no-eff-email
+$sudo systemctl start certbot-renew.timer
+mkdir -p $HOME/sslcerts
+$sudo -u root ./deploy-scripts/cp_certs $1 $HOME/sslcerts/
+$sudo chown $USER:$USER $HOME/sslcerts/*
+
+./deploy-scripts/auto_cert_renew $1 $USER
+
